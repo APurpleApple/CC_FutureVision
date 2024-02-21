@@ -1,0 +1,21 @@
+################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+**/.vs/**
+**/vs/**
+*/bin/**
+*/obj/**
+*/.bin/**
+*/.obj/**
+*/.release/**
+*/release/**
+packages/**
+**/*.zip
+*.user
+*.user.*
+**/CobaltCore.dll
+**/obj/**
+**/bin/**
+/bin
+/obj
