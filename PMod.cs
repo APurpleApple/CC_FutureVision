@@ -5,6 +5,7 @@ using Nickel;
 using System;
 using System.Collections.Generic;
 using System.Collections.Frozen;
+using Myosotis.DeepCopy;
 
 namespace APurpleApple.FutureVision;
 
@@ -43,6 +44,8 @@ public sealed class PMod : SimpleMod, OnMouseDown
 
     public PMod(IPluginPackage<IModManifest> package, IModHelper helper, ILogger logger) : base(package, helper, logger)
     {
+        DeepCopy.Init();
+
         Instance = this;
 
         RegisterSprite("button_vis", "buttons/vision.png", package);

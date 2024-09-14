@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,7 @@ using System.Xml.Serialization;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Myosotis.DeepCopy;
 using Nanoray.PluginManager;
 using static OneOf.Types.TrueFalseOrNull;
 namespace APurpleApple.FutureVision
@@ -27,7 +29,7 @@ namespace APurpleApple.FutureVision
         static bool isSimulating = false;
         static bool isSimulationDirty = true;
 
-        static UIKey? hoveredKey = null;
+        static Box? hoveredBox = null;
 
         static bool isSimulationSuccessful = false;
         public static bool isPreviewEnabled = true;
@@ -65,6 +67,7 @@ namespace APurpleApple.FutureVision
         {
             G g = __instance;
             //if (isSimulationDirty) return;
+            if (g.state == null) return;
             if (nextTurnState == null || beforeEnemyTurnState == null) return;
             if (g.state.route is not Combat c) return;
             if (nextTurnState.route is not Combat cs) return;
@@ -194,11 +197,30 @@ namespace APurpleApple.FutureVision
                 isSimulationDirty = true;
             }
 
-            if (g.hoverKey != hoveredKey)
+            
+        }
+
+        [HarmonyPatch(typeof(G), nameof(G.UIAfterFrame)), HarmonyPrefix]
+        public static void SetDirtyOnHover(G __instance)
+        {
+            if (__instance.hoverKey != hoveredBox?.key)
             {
-                isSimulationDirty = true;
-                hoveredKey = g.hoverKey;
+                Box? box = __instance.boxes.FirstOrDefault(b => b.key.Equals(__instance.hoverKey));
+                if (box?.onMouseDown != null || hoveredBox?.onMouseDown != null)
+                {
+                    isSimulationDirty = true;
+                }
+                hoveredBox = box;
             }
+        }
+
+        [HarmonyPatch(typeof(State), nameof(State.ChangeRoute)), HarmonyPostfix]
+        public static void RemovePreviewOnRouteChnge()
+        {
+            nextTurnState = null;
+            beforeEnemyTurnState = null;
+            afterDroneState = null;
+            isSimulationDirty = true;
         }
 
         [HarmonyPatch(typeof(Combat), nameof(Combat.Update)), HarmonyPostfix]
@@ -271,14 +293,17 @@ namespace APurpleApple.FutureVision
             Vec v = g.Peek(new Rect(-Math.Round(vec.x / 2.0), 0, vec2.x, healthChunkHeight + 3)).xy;
 
 
-            int totalShield = maxShieldAtTurnEnd + tempShieldAtTurnEnd;
+            int totalShieldAtTurnEnd = maxShieldAtTurnEnd + tempShieldAtTurnEnd;
             double x = v.x + fullBarLength * chunkWidth + (fullBarLength - 1) * chunkMargin + 1;
 
-            int diff = totalShield - (maxShield + tempShield);
-            Vec shieldBarSize = new Vec(diff * chunkWidth + (diff - 1) * chunkMargin + 2, shieldChunkHeight + 2);
-            Draw.Rect(x, v.y - 2.0, shieldBarSize.x + 2.0, shieldBarSize.y + 4.0, Colors.black.fadeAlpha(0.75));
-            Draw.Rect(x, v.y - 1.0, shieldBarSize.x + 1.0, shieldBarSize.y + 2.0, Colors.healthBarBorder);
-            Draw.Rect(x, v.y, shieldBarSize.x, shieldBarSize.y, Colors.healthBarBbg);
+            int diff = totalShieldAtTurnEnd - (maxShield + tempShield);
+            if (diff != 0)
+            {
+               Vec shieldBarSize = new Vec(diff * chunkWidth + (diff - 1) * chunkMargin + 2, shieldChunkHeight + 2);
+               Draw.Rect(x+1, v.y - 2.0, shieldBarSize.x + 1.0, shieldBarSize.y + 4.0, Colors.black.fadeAlpha(0.75));
+               Draw.Rect(x+1, v.y - 1.0, shieldBarSize.x, shieldBarSize.y + 2.0, Colors.healthBarBorder);
+               Draw.Rect(x+1, v.y, shieldBarSize.x-1, shieldBarSize.y, Colors.healthBarBbg);
+            }
 
 
             if (healthPreview <= __instance.hull)
@@ -402,7 +427,8 @@ namespace APurpleApple.FutureVision
             }
             
             State realState = g.state;
-            nextTurnState = Mutil.DeepCopy(g.state);
+            nextTurnState = DeepCopy.Copy(g.state);
+
             beforeEnemyTurnState = nextTurnState;
 
             if (nextTurnState.route is Combat c)
@@ -412,39 +438,9 @@ namespace APurpleApple.FutureVision
                 pfx.Save();
                 isSimulating = true;
 
-                if (hoveredKey.HasValue)
+                if (hoveredBox?.onMouseDown != null)
                 {
-                    if (hoveredKey.Value.k == UK.card)
-                    {
-                        foreach (Card card in c.hand)
-                        {
-                            if (card.uuid == hoveredKey.Value.v)
-                            {
-                                c.TryPlayCard(nextTurnState, card);
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hoveredKey == UK.btn_move_left)
-                    {
-                        c.DoEvade(g, -1);
-                    }
-
-                    if (hoveredKey == UK.btn_move_right)
-                    {
-                        c.DoEvade(g, 1);
-                    }
-
-                    if (hoveredKey == UK.btn_moveDrones_left)
-                    {
-                        c.DoDroneShift(g, -1);
-                    }
-
-                    if (hoveredKey == UK.btn_moveDrones_right)
-                    {
-                        c.DoDroneShift(g, 1);
-                    }
+                    DeepCopy.TryTranspose(hoveredBox.onMouseDown)?.OnMouseDown(g, hoveredBox);
                 }
 
                 CardAction? action = null;
@@ -482,13 +478,18 @@ namespace APurpleApple.FutureVision
                         isSimulationSuccessful = false;
                         break;
                     }
+
                     c.Update(g);
                     if (action != c.currentCardAction)
                     {
                         action = c.currentCardAction;
                         if (c.currentCardAction is AAfterPlayerTurn)
                         {
-                            beforeEnemyTurnState = Mutil.DeepCopy(nextTurnState);
+                            beforeEnemyTurnState = DeepCopy.Copy(nextTurnState);
+                        }
+                        if (action is AStartPlayerTurn)
+                        {
+                            break;
                         }
                     }
                 }

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <RootNamespace>APurpleApple.FutureVision</RootNamespace>
-        <Version>1.0.2</Version>
+        <Version>1.0.3</Version>
 		<IsLegacyMod>false</IsLegacyMod>
         <IncludedModProjectPaths>i18n;assets</IncludedModProjectPaths>
         <TargetFramework>net8.0</TargetFramework>
