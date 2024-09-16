@@ -1,10 +1,12 @@
-﻿using Newtonsoft.Json;
+﻿using Mono.Cecil.Pdb;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ObjectiveC;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -16,7 +18,6 @@ namespace Myosotis.DeepCopy
         private static HashSet<Type> copyTypeSkip = new();
         private static Dictionary<Type, bool> valueTypes = new();
         private static Dictionary<Type, bool> parameterlessConstructor = new();
-        private static Dictionary<int, object> magicTransposer = new();
 
         public static void Init()
         {
@@ -51,23 +52,82 @@ namespace Myosotis.DeepCopy
             return true;
         }
 
-        public static T? TryTranspose<T>(T thing)
+        public static FieldInfo[]? GetReferencePath(object startPoint, object thing)
         {
-            if (thing == null) return default(T);
+            List<FieldInfoPathNode> queue = new();
 
-            int hashCode = thing.GetHashCode();
-            if (magicTransposer.ContainsKey(thing.GetHashCode()))
+            queue.Add(new FieldInfoPathNode(startPoint));
+            Type thingType = thing.GetType();
+            while (queue.Count > 0)
             {
-                object transposition = magicTransposer[hashCode];
-                if (transposition.GetType() == thing.GetType())
+                FieldInfoPathNode node = queue.Dequeue();
+                Type objType = node.obj.GetType();
+
+                if (objType == thingType && node.obj == thing)
                 {
-                    return (T)transposition;
+                    return node.GetPath();
+                }
+
+                if (!copyCache.ContainsKey(objType))
+                {
+                    CacheTypeFieldInfos(objType);
+                }
+
+                FieldInfo[] flds = copyCache[objType];
+                foreach (var field in flds)
+                {
+                    object? v = field.GetValue(node.obj);
+                    if (v == null) continue;
+                    queue.Add(new FieldInfoPathNode(v) { field = field, parentNode = node });
                 }
             }
 
-            return default(T);
+            return null;
         }
 
+        private class FieldInfoPathNode
+        {
+            public FieldInfo? field;
+            public object obj;
+            public FieldInfoPathNode? parentNode;
+
+            public FieldInfoPathNode(object obj)
+            {
+                this.obj = obj;
+            }
+
+            public FieldInfo[] GetPath()
+            {
+                List<FieldInfo> path = new();
+
+                FieldInfoPathNode? node = this;
+
+                while(node != null && node.field != null)
+                {
+                    path.Add(node.field);
+                    node = node.parentNode;
+                }
+
+                path.Reverse();
+                return path.ToArray();
+            }
+        }
+
+        public static object? ReadAtReferencePath(FieldInfo[] path, object startPoint)
+        {
+            object? value = startPoint;
+
+            for (int i = 0; i < path.Length; i++)
+            {
+                value = path[i].GetValue(value);
+                if (value == null)
+                {
+                    return null;
+                }
+            }
+
+            return value;
+        }
         public static T Copy<T>(T thing)
         {
             //return JsonConvert.DeserializeObject(JsonConvert.SerializeObject(thing, JSON.settingDefault), JSON.settingDefault);
@@ -132,8 +192,6 @@ namespace Myosotis.DeepCopy
                 }
             }
             seenTypes.Remove(typeT);
-
-            magicTransposer[thing.GetHashCode()] = result!;
             return result;
         }
         public static void CacheTypeFieldInfos(Type t)

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -427,7 +428,7 @@ namespace APurpleApple.FutureVision
             }
             
             State realState = g.state;
-            nextTurnState = DeepCopy.Copy(g.state);
+            nextTurnState = Mutil.DeepCopy(g.state);
 
             beforeEnemyTurnState = nextTurnState;
 
@@ -440,7 +441,12 @@ namespace APurpleApple.FutureVision
 
                 if (hoveredBox?.onMouseDown != null)
                 {
-                    DeepCopy.TryTranspose(hoveredBox.onMouseDown)?.OnMouseDown(g, hoveredBox);
+                    FieldInfo[]? fieldPath = DeepCopy.GetReferencePath(realState, hoveredBox.onMouseDown);
+                    if (fieldPath != null)
+                    {
+                        OnMouseDown? interactor = DeepCopy.ReadAtReferencePath(fieldPath, nextTurnState) as OnMouseDown;
+                        interactor?.OnMouseDown(g, hoveredBox);
+                    }
                 }
 
                 CardAction? action = null;
@@ -485,7 +491,7 @@ namespace APurpleApple.FutureVision
                         action = c.currentCardAction;
                         if (c.currentCardAction is AAfterPlayerTurn)
                         {
-                            beforeEnemyTurnState = DeepCopy.Copy(nextTurnState);
+                            beforeEnemyTurnState = Mutil.DeepCopy(nextTurnState);
                         }
                         if (action is AStartPlayerTurn)
                         {
