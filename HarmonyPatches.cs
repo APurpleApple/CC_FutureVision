@@ -470,6 +470,11 @@ namespace APurpleApple.FutureVision
 
                 while (c.cardActions.Count > 0)
                 {
+                    if (nextTurnState == null)
+                    {
+                        isSimulationSuccessful = false;
+                        break;
+                    }
                     if (nextTurnState.rngActions.seed != currentRNG)
                     {
                         nextTurnState = null;

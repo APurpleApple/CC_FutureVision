@@ -1,6 +1,12 @@
 {
   "UniqueName": "APurpleApple.FutureVision",
-  "Version": "1.0.3",
+  "Version": "1.0.5",
   "RequiredApiVersion": "0.1.0",
-  "EntryPointAssembly": "CC_FutureVision.dll"
+  "EntryPointAssembly": "CC_FutureVision.dll",
+
+  "UpdateChecks": {
+    "NexusMods": {
+      "ID": 13
+    }
+  }
 }
